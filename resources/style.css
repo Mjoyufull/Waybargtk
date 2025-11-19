@@ -1,0 +1,356 @@
+* {
+    /* `otf-font-awesome` is required to be installed for icons */
+    font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+}
+
+window#waybar {
+    background-color: #282c34;
+    border-bottom: 3px solid #3e4451;
+    color: #abb2bf;
+    transition-property: background-color;
+    transition-duration: .5s;
+}
+
+window#waybar.hidden {
+    opacity: 0.2;
+}
+
+/*
+window#waybar.empty {
+    background-color: transparent;
+}
+window#waybar.solo {
+    background-color: #FFFFFF;
+}
+*/
+
+window#waybar.termite {
+    background-color: #3F3F3F;
+}
+
+window#waybar.chromium {
+    background-color: #000000;
+    border: none;
+}
+
+button {
+    /* Use box-shadow instead of border so the text isn't offset */
+    box-shadow: inset 0 -3px transparent;
+    /* Avoid rounded borders under each button name */
+    border: none;
+    border-radius: 0;
+}
+
+/* https://github.com/Alexays/Waybar/wiki/FAQ#the-workspace-buttons-have-a-strange-hover-effect */
+button:hover {
+    background: inherit;
+    box-shadow: inset 0 -3px #61afef;
+}
+
+/* you can set a style on hover for any module like this */
+#pulseaudio:hover {
+    background-color: #3e4451;
+}
+
+#workspaces button {
+    padding: 0 5px;
+    background-color: transparent;
+    color: #abb2bf;
+}
+
+#workspaces button:hover {
+    background: #3e4451;
+}
+
+#workspaces button.focused, #workspaces button.active {
+    background-color: #3e4451;
+    box-shadow: inset 0 -3px #61afef;
+    color: #61afef;
+}
+
+#workspaces button.urgent {
+    background-color: #e06c75;
+    color: #282c34;
+}
+
+#mode {
+    background-color: #3e4451;
+    box-shadow: inset 0 -3px #61afef;
+    color: #61afef;
+}
+
+#clock,
+#battery,
+#cpu,
+#memory,
+#disk,
+#temperature,
+#backlight,
+#network,
+#pulseaudio,
+#wireplumber,
+#custom-media,
+#tray,
+#mode,
+#idle_inhibitor,
+#scratchpad,
+#power-profiles-daemon,
+#mpd {
+    padding: 0 10px;
+    color: #abb2bf;
+}
+
+#window,
+#workspaces {
+    margin: 0 4px;
+}
+
+/* If workspaces is the leftmost module, omit left margin */
+.modules-left > widget:first-child > #workspaces {
+    margin-left: 0;
+}
+
+/* If workspaces is the rightmost module, omit right margin */
+.modules-right > widget:last-child > #workspaces {
+    margin-right: 0;
+}
+
+#clock {
+    background-color: #3e4451;
+    color: #61afef;
+}
+
+#battery {
+    background-color: #3e4451;
+    color: #98c379;
+}
+
+#battery.charging, #battery.plugged {
+    color: #282c34;
+    background-color: #98c379;
+}
+
+@keyframes blink {
+    to {
+        background-color: #e06c75;
+        color: #282c34;
+    }
+}
+
+/* Using steps() instead of linear as a timing function to limit cpu usage */
+#battery.critical:not(.charging) {
+    background-color: #e06c75;
+    color: #282c34;
+    animation-name: blink;
+    animation-duration: 0.5s;
+    animation-timing-function: steps(12);
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+#power-profiles-daemon {
+    padding-right: 15px;
+}
+
+#power-profiles-daemon.performance {
+    background-color: #e06c75;
+    color: #282c34;
+}
+
+#power-profiles-daemon.balanced {
+    background-color: #61afef;
+    color: #282c34;
+}
+
+#power-profiles-daemon.power-saver {
+    background-color: #98c379;
+    color: #282c34;
+}
+
+label:focus {
+    background-color: #3e4451;
+}
+
+#cpu {
+    background-color: #3e4451;
+    color: #e5c07b;
+}
+
+#memory {
+    background-color: #3e4451;
+    color: #c678dd;
+}
+
+#disk {
+    background-color: #3e4451;
+    color: #d19a66;
+}
+
+#backlight {
+    background-color: #3e4451;
+    color: #56b6c2;
+}
+
+#network {
+    background-color: #3e4451;
+    color: #61afef;
+}
+
+#network.disconnected {
+    background-color: #3e4451;
+    color: #e06c75;
+}
+
+#pulseaudio {
+    background-color: #3e4451;
+    color: #e5c07b;
+}
+
+#pulseaudio.muted {
+    background-color: #3e4451;
+    color: #5c6370;
+}
+
+#pulseaudio.source-muted {
+    color: #5c6370;
+}
+
+#wireplumber {
+    background-color: #3e4451;
+    color: #e5c07b;
+}
+
+#wireplumber.muted {
+    background-color: #3e4451;
+    color: #5c6370;
+}
+
+#custom-media {
+    background-color: #3e4451;
+    color: #98c379;
+    min-width: 100px;
+}
+
+#custom-media.custom-spotify {
+    background-color: #3e4451;
+    color: #98c379;
+}
+
+#custom-media.custom-vlc {
+    background-color: #3e4451;
+    color: #d19a66;
+}
+
+#temperature {
+    background-color: #3e4451;
+    color: #d19a66;
+}
+
+#temperature.critical {
+    background-color: #3e4451;
+    color: #e06c75;
+}
+
+#tray {
+    background-color: #3e4451;
+    color: #abb2bf;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    background-color: #3e4451;
+    color: #e06c75;
+}
+
+#idle_inhibitor {
+    background-color: #3e4451;
+    color: #abb2bf;
+}
+
+#idle_inhibitor.activated {
+    background-color: #3e4451;
+    color: #98c379;
+}
+
+#mpd {
+    background-color: #3e4451;
+    color: #98c379;
+}
+
+#mpd.disconnected {
+    background-color: #3e4451;
+    color: #e06c75;
+}
+
+#mpd.stopped {
+    background-color: #3e4451;
+    color: #5c6370;
+}
+
+#mpd.paused {
+    background-color: #3e4451;
+    color: #e5c07b;
+}
+
+#language {
+    background: #3e4451;
+    color: #56b6c2;
+    padding: 0 5px;
+    margin: 0 5px;
+    min-width: 16px;
+}
+
+#keyboard-state {
+    background: #3e4451;
+    color: #abb2bf;
+    padding: 0 0px;
+    margin: 0 5px;
+    min-width: 16px;
+}
+
+#keyboard-state > label {
+    padding: 0 5px;
+}
+
+#keyboard-state > label.locked {
+    background: #3e4451;
+    color: #e06c75;
+}
+
+#scratchpad {
+    background: #3e4451;
+    color: #abb2bf;
+}
+
+#scratchpad.empty {
+	background-color: transparent;
+}
+
+#privacy {
+    padding: 0;
+}
+
+#privacy-item {
+    padding: 0 5px;
+    color: #abb2bf;
+}
+
+#privacy-item.screenshare {
+    background-color: #3e4451;
+    color: #d19a66;
+}
+
+#privacy-item.audio-in {
+    background-color: #3e4451;
+    color: #98c379;
+}
+
+#privacy-item.audio-out {
+    background-color: #3e4451;
+    color: #61afef;
+}

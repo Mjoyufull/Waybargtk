@@ -1,0 +1,5 @@
+---
+BasedOnStyle: Google
+AlignConsecutiveDeclarations: false
+ColumnLimit: 100
+...

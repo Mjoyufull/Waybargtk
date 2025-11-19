@@ -1,0 +1,132 @@
+{
+  // Example Waybar configuration demonstrating enhanced workspace features
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "spacing": 8,
+  // Floating bar margins - adjust to control distance from screen edges
+  "margin-top": 10,
+  "margin-bottom": 10,
+  "margin-left": 10,
+  "margin-right": 10,
+  
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "cpu",
+    "pulseaudio",
+    "network",
+    "tray",
+    "custom/logo"
+  ],
+
+  // Enhanced Hyprland workspaces module configuration
+  "hyprland/workspaces": {
+    // Window de-duplication: show one icon per application class
+    // When multiple windows of the same app exist, only one icon is shown
+    "deduplicate-windows": true,
+    
+    // Workspace grouping mode
+    // "default" - workspaces shown separately: [1][2][3][sp1][sp2]
+    // "paired" - regular and special workspaces grouped: [1][sp1][2][sp2][3]
+    "workspace-grouping": "paired",
+    
+    // Use GTK system icons from icon theme instead of text icons
+    // Icons are loaded from system icon theme (PNG/SVG)
+    "use-system-icons": true,
+    
+    // Icon size in pixels for workspace window icons
+    "icon-size": 16,
+    
+    // Indicator shown before special workspace icons
+    // Can be text, emoji, or nerd font icon
+    "special-workspace-indicator": "󰍠",
+    
+    // Scale factor for special workspace icons
+    // Value between 0.0 and 1.0, where 0.75 means 75% of normal size
+    "special-workspace-icon-scale": 0.75,
+    
+    // Show superscript workspace number after the last icon
+    // Displays workspace number as superscript (e.g., icon ¹ for workspace 1)
+    "show-workspace-number": true,
+    
+    // Show superscript number for special workspaces
+    // Same as above but for special workspaces
+    "show-special-workspace-number": true,
+    
+    // Standard Waybar options
+    "format": "{windows}",
+    "show-special": true,
+    "all-outputs": false
+  },
+
+  // Other module configurations
+  "tray": {
+    "icon-size": 16,
+    "spacing": 10
+  },
+  
+  "clock": {
+    "timezone": "America/Chicago",
+    "format": "{:%a %b %d %I:%M:%S %p}",
+    "interval": 1,
+    "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+    "format-alt": "{:%Y-%m-%d}"
+  },
+  
+  "cpu": {
+    "interval": 2,
+    "format": "{usage}% ",
+    "tooltip": true
+  },
+  
+  "network": {
+    "interface": "wl*",
+    "format-wifi": "{essid} ",
+    "format-ethernet": "{ipaddr} ",
+    "format-disconnected": "Disconnected ⚠",
+    "tooltip-format": "{ifname}: {ipaddr}/{cidr}",
+    "on-click": "nm-connection-editor"
+  },
+  
+  "temperature": {
+    "critical-threshold": 80,
+    "format": "{temperatureC}°C {icon}",
+    "format-icons": ["", "", ""]
+  },
+  
+  "battery": {
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "format": "{capacity}% {icon}",
+    "format-full": "{capacity}% {icon}",
+    "format-charging": "{capacity}% ",
+    "format-plugged": "{capacity}% ",
+    "format-alt": "{time} {icon}",
+    "format-icons": ["", "", "", "", ""]
+  },
+  
+  "pulseaudio": {
+    "format": "󰋋 {volume}% {format_source}",
+    "format-muted": "󰖁 muted {format_source}",
+    "format-source": "󰍉 {volume}%",
+    "format-source-muted": "󰍉 muted",
+    "format-icons": {
+      "default": ["󰕿", "󰖀", "󰕾"]
+    },
+    "on-click": "pavucontrol",
+    "on-click-right": "pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+  },
+  
+  "custom/logo": {
+    "format": " ",
+    "tooltip": false
+  }
+}
+

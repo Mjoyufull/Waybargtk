@@ -1,0 +1,34 @@
+name: linux
+
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-linux-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - alpine
+          - archlinux
+          - debian
+          - fedora
+          - opensuse
+          - gentoo
+        cpp_std: [c++20]
+
+    runs-on: ubuntu-latest
+    container:
+      image: alexays/waybar:${{ matrix.distro }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: configure
+        run: meson setup -Dman-pages=enabled -Dcpp_std=${{matrix.cpp_std}} build
+      - name: build
+        run: ninja -C build
+      - name: test
+        run: make test

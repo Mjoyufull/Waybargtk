@@ -1,0 +1,49 @@
+# vim: ft=Dockerfile
+
+FROM debian:sid-slim
+
+RUN apt update && \
+    apt install --no-install-recommends --no-install-suggests -y \
+        build-essential \
+        catch2 \
+        cmake \
+        git \
+        gobject-introspection \
+        libdbusmenu-gtk3-dev \
+        libegl1-mesa-dev \
+        libfmt-dev \
+        libgbm-dev \
+        libgirepository1.0-dev \
+        libgles2-mesa-dev \
+        libgtk-layer-shell-dev \
+        libgtkmm-3.0-dev \
+        libhowardhinnant-date-dev \
+        libiniparser-dev \
+        libinput-dev     \
+        libjack-jackd2-dev \
+        libjsoncpp-dev \
+        libmpdclient-dev \
+        libnl-3-dev \
+        libnl-genl-3-dev \
+        libpixman-1-dev  \
+        libplayerctl-dev \
+        libpugixml-dev \
+        libpulse-dev \
+        libsndio-dev \
+        libspdlog-dev \
+        libudev-dev \
+        libupower-glib-dev \
+        libwayland-dev \
+        libwireplumber-0.5-dev \
+        libxkbcommon-dev \
+        libxkbregistry-dev \
+        locales \
+        meson \
+        ninja-build \
+        pkg-config \
+        python3-pip \
+        python3-venv \
+        scdoc \
+        sudo \
+        wayland-protocols \
+    && apt clean

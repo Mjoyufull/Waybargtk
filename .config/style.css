@@ -1,0 +1,203 @@
+/* Color scheme definitions - One Dark Pro palette */
+@define-color background #282c34;      /* Main background color - dark gray */
+@define-color foreground #abb2bf;      /* Main text color - light gray */
+@define-color selection #3e4451;       /* Selection/highlight background - medium gray */
+@define-color comment #5c6370;         /* Comment/muted text color - darker gray */
+@define-color red #e06c75;             /* Error/critical color */
+@define-color orange #d19a66;          /* Warning/orange accent */
+@define-color yellow #e5c07b;          /* Yellow accent for CPU/pulseaudio */
+@define-color green #98c379;           /* Success/battery color */
+@define-color aqua #56b6c2;             /* Aqua/cyan accent */
+@define-color blue #61afef;             /* Primary accent color - used for borders and highlights */
+@define-color purple #c678dd;          /* Purple accent for memory */
+@define-color pink #be5046;             /* Pink accent */
+
+/* Global styles - applied to all elements unless overridden */
+* {
+  border-radius: 0px;                  /* No rounded corners - sharp edges */
+  font-family: "JetBrains Mono Nerd Font";  /* Font family for all text */
+  font-weight: 600;                     /* Medium-bold font weight */
+  font-size: 14px;                      /* Base font size */
+  margin: 1px;                          /* Small margin on all sides */
+}
+
+/* Main waybar window container */
+window#waybar {
+  background-color: @background;        /* Dark background matching theme */
+  border: 3px solid @blue;              /* Blue border around entire waybar */
+  border-radius: 0px;                   /* Sharp corners */
+  /* Note: Bar position is controlled by config file margins, not CSS margins */
+  padding: 0;                           /* No padding - using margin on containers instead */
+  box-shadow: 0 4px 15px rgba(0,0,0,0.6);  /* Subtle shadow for depth */
+}
+
+/* Module containers - margin creates space between border and module backgrounds */
+.modules-left,
+.modules-center,
+.modules-right {
+  margin: 5px;                          /* Space between border and modules on all sides - prevents clipping */
+}
+
+/* Base styles for all modules - individual modules can override below */
+#custom-workspaces,
+#workspaces button,
+#tags button,
+#clock,
+#cpu,
+#memory,
+#temperature,
+#battery,
+#tray,
+#pulseaudio,
+#network {
+  border-radius: 0px;                   /* Sharp corners */
+  border: 3px solid @selection;         /* Gray border - not blue, only logo gets blue */
+  background: @selection;                /* Dark gray background */
+  box-shadow: none;                     /* No shadow on modules */
+  text-shadow: none;                     /* No text shadow */
+  padding: 2px 12px;                    /* Internal padding: 2px top/bottom, 12px left/right */
+  color: @foreground;                    /* Light gray text color */
+  margin: 0 2px;                        /* Small horizontal margin between modules */
+}
+
+/* Custom logo module - always has blue border and text */
+#custom-logo {
+  border-radius: 0px;                   /* Sharp corners */
+  border: 3px solid @blue;              /* Always blue border - not gray like other modules */
+  background: @selection;                /* Same dark gray background as other modules */
+  box-shadow: none;                     /* No shadow */
+  text-shadow: none;                     /* No text shadow */
+  padding: 2px 12px;                    /* Internal padding */
+  color: @blue;                          /* Blue text color to match the border */
+  margin: 0 2px;                        /* Horizontal margin */
+  margin-right: 0;                      /* No right margin to prevent cutoff */
+  padding-right: 12px;                  /* Extra right padding for spacing */
+}
+
+/* Prevent last module in right section from being cut off */
+.modules-right > widget:last-child {
+  margin-right: 0;                      /* Remove right margin from last module */
+}
+
+/* Active or focused workspace buttons */
+#workspaces button.active,
+#workspaces button.focused,
+#tags button.active,
+#tags button.focused {
+  border: 3px solid @blue;               /* Blue border when active */
+  background: @selection;                /* Dark gray background */
+  color: @blue;                          /* Blue text when active */
+  padding: 2px 12px;                    /* Same padding as other modules */
+}
+
+/* Hover effects for interactive modules */
+#custom-workspaces:hover,
+#workspaces button:hover,
+#tags button:hover,
+#clock:hover,
+#cpu:hover,
+#memory:hover,
+#temperature:hover,
+#battery:hover,
+#tray:hover,
+#pulseaudio:hover,
+#network:hover,
+#custom-logo:hover {
+  border: 3px solid @blue;               /* Blue border on hover */
+  background: @selection;                /* Keep dark gray background */
+  font-weight: 600;                     /* Maintain font weight */
+  color: @blue;                          /* Blue text on hover */
+}
+
+/* Module-specific colors - each module type has its own color */
+
+/* Clock module - blue color */
+#clock {
+  color: @blue;
+}
+
+/* CPU module - yellow color */
+#cpu {
+  color: @yellow;
+}
+
+/* Memory module - purple color */
+#memory {
+  color: @purple;
+}
+
+/* Temperature module - orange color, red when critical */
+#temperature {
+  color: @orange;
+}
+
+#temperature.critical {
+  color: @red;                           /* Red when temperature is critical */
+}
+
+/* Battery module - green color, with special states */
+#battery {
+  color: @green;
+}
+
+/* Battery when charging or plugged in - green background with dark text */
+#battery.charging, #battery.plugged {
+  color: @background;                    /* Dark text on green background */
+  background-color: @green;             /* Green background */
+}
+
+/* Battery when critically low - red background with dark text */
+#battery.critical:not(.charging) {
+  background-color: @red;                /* Red background */
+  color: @background;                    /* Dark text */
+}
+
+/* Pulseaudio (volume) module - yellow color */
+#pulseaudio {
+  color: @yellow;
+}
+
+/* Pulseaudio when muted - grayed out */
+#pulseaudio.muted {
+  color: @comment;                       /* Muted gray color */
+}
+
+/* Pulseaudio when source (mic) is muted - also grayed out */
+#pulseaudio.source-muted {
+  color: @comment;                       /* Muted gray color */
+}
+
+/* Network module - blue color */
+#network {
+  color: @blue;
+}
+
+/* Network when disconnected - red color to indicate error */
+#network.disconnected {
+  color: @red;
+}
+
+/* Tray (system tray icons) - uses default foreground color */
+#tray {
+  color: @foreground;
+}
+
+/* Custom logo - blue color (already set above, but keeping for consistency) */
+#custom-logo {
+  color: @blue;
+}
+
+/* Workspace number superscript styling - numbers shown after last icon */
+.workspace-number {
+  color: @foreground;
+  font-size: 10px;                        /* Smaller font for superscript */
+  padding: 0 2px;                         /* Small padding around the number */
+  margin-left: 2px;                       /* Small space from the last icon */
+}
+
+.special-workspace-number {
+  color: @foreground;
+  font-size: 9px;                         /* Even smaller for special workspaces */
+  padding: 0 2px;                         /* Small padding around the number */
+  margin-left: 2px;                       /* Small space from the last icon */
+}
