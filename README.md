@@ -1,5 +1,5 @@
 # WaybarGtk
-<img width="1924" height="64" alt="image" src="https://github.com/user-attachments/assets/f3499b4d-df81-4b36-90d5-a62c09541695" />
+<img width="1924" height="64" alt="image" src="https://github.com/user-attachments/assets/12b80c7c-c9b1-4997-997a-c2b5143c6988" />
 
 Fork of [Waybar](https://github.com/Alexays/Waybar) with enhanced Hyprland workspace features and GTK icon support.
 
