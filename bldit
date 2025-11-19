@@ -1,0 +1,9 @@
+bldit() {
+    if [ -d "build" ]; then
+        meson setup --reconfigure build
+    else
+        meson setup build
+    fi
+    meson compile -C build
+    cp build/waybar waybargtk
+}
