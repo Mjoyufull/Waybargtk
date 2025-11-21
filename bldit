@@ -1,9 +1,21 @@
 bldit() {
+    # Clean build directory if it exists
     if [ -d "build" ]; then
-        meson setup --reconfigure build
+        meson setup --reconfigure build || return 1
     else
-        meson setup build
+        meson setup build || return 1
     fi
-    meson compile -C build
-    cp build/waybar waybargtk
+    
+    # Compile the project
+    meson compile -C build || return 1
+    
+    # Verify the binary was created
+    if [ ! -f "build/waybar" ]; then
+        echo "Error: build/waybar binary not found after compilation"
+        return 1
+    fi
+    
+    # Copy to expected location
+    cp build/waybar waybargtk || return 1
+    chmod +x waybargtk
 }
