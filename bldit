@@ -3,6 +3,7 @@
 # Disables all optional features to avoid missing dependencies.
 
 MESON_OPTS=(
+    -Dfmt:default_library=static
     -Dlibinput=disabled
     -Dlibnl=disabled
     -Dlibudev=disabled
