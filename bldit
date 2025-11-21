@@ -1,40 +1,17 @@
 #!/usr/bin/env bash
-# Build script for Waybargtk (Waybar fork)
-# This version builds fmt as a shared library via CMake (BUILD_SHARED_LIBS=TRUE)
-# and then builds Waybargtk with Meson, linking against the shared fmt.
-
-set -e
-
-# ---------- Build fmt (shared) ----------
-# Assume fmt source is available in the subprojects directory (pkgit clones it there)
-FMT_SRC="$(pwd)/subprojects/fmt"
-if [ ! -d "$FMT_SRC" ]; then
-    echo "[bldit] ERROR: fmt source not found at $FMT_SRC"
-    exit 1
-fi
-
-FMT_BUILD="$(pwd)/fmt-build"
-FMT_INSTALL="$(pwd)/fmt-install"
-mkdir -p "$FMT_BUILD"
-cd "$FMT_BUILD"
-
-echo "[bldit] Configuring fmt (shared) with CMake..."
-cmake "$FMT_SRC" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_SHARED_LIBS=TRUE \
-    -DCMAKE_INSTALL_PREFIX="$FMT_INSTALL"
-
-echo "[bldit] Building and installing fmt..."
-cmake --build . --config Release --target install
-
-# Return to project root
-cd "$(pwd)/../.."
-
-# Add fmt's pkgconfig and library paths so Meson can find the shared library
-export PKG_CONFIG_PATH="$FMT_INSTALL/lib/pkgconfig:${PKG_CONFIG_PATH}"
-export LD_LIBRARY_PATH="$FMT_INSTALL/lib:${LD_LIBRARY_PATH}"
-
-# ---------- Meson options (disable optional features) ----------
+# Simple build script for Waybargtk (Waybar fork)
+# This script builds Waybargtk using Meson/Ninja with all optional features disabled.
+# If you need a custom bldit for fmt, create /etc/pkgit/bldit/fmt with the following content:
+#
+# bldit () {
+#     mkdir -p build
+#     cd build
+#     cmake -DBUILD_SHARED_LIBS=TRUE ..
+#     make
+# }
+#
+# -------------------------------------------------
+# Meson options (disable optional features to avoid missing deps)
 MESON_OPTS=(
     -Dlibinput=disabled
     -Dlibnl=disabled
@@ -58,17 +35,17 @@ MESON_OPTS=(
     -Dgps=disabled
 )
 
-# ---------- Configure and build Waybargtk ----------
+# Configure (reconfigure if build dir exists)
 if [ -d "build" ]; then
     meson setup --reconfigure "${MESON_OPTS[@]}" build || { echo "[bldit] meson configuration failed"; exit 1; }
 else
     meson setup "${MESON_OPTS[@]}" build || { echo "[bldit] meson configuration failed"; exit 1; }
 fi
 
-echo "[bldit] Building Waybargtk with ninja..."
+# Build using ninja
 ninja -C build || { echo "[bldit] build failed"; exit 1; }
 
-# ---------- Install binary ----------
+# Install binary
 if [ -f "build/waybar" ]; then
     cp "build/waybar" "waybargtk"
     chmod +x waybargtk

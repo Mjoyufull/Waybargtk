@@ -94,6 +94,33 @@ $ ninja -C build install
 $ waybar
 ```
 
+#### Installing with pkgit
+
+Waybargtk can be installed using **pkgit**. Add the repository and install the package:
+
+```bash
+# Add the Waybargtk repository (once)
+pkgit a https://github.com/Mjoyufull/Waybargtk
+
+# Install Waybargtk
+pkgit install waybargtk
+```
+#### Custom fmt build
+
+you might need to build `fmt` as a shared library, create a custom bldit script at ``` /etc/pkgit/bldit/fmt ``` with the following content:
+
+```bash
+bldit () {
+    mkdir build
+    cd build
+    cmake -DBUILD_SHARED_LIBS=TRUE ..
+    make
+}
+```
+
+For more information about pkgit, see https://github.com/dacctal/pkgit.
+
+
 **Dependencies**
 
 ```
