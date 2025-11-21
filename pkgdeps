@@ -1,6 +1,6 @@
 https://gitlab.gnome.org/GNOME/glib.git
 https://gitlab.gnome.org/GNOME/gtkmm.git
-https://github.com/fmtlib/fmt.git 8.1.1
+https://github.com/fmtlib/fmt.git 11.2.0
 https://github.com/gabime/spdlog.git
 https://github.com/open-source-parsers/jsoncpp.git
 https://github.com/wmww/gtk-layer-shell.git
