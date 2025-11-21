@@ -1,21 +1,47 @@
-bldit() {
-    # Clean build directory if it exists
-    if [ -d "build" ]; then
-        meson setup --reconfigure build || return 1
-    else
-        meson setup build || return 1
-    fi
-    
-    # Compile the project
-    meson compile -C build || return 1
-    
-    # Verify the binary was created
-    if [ ! -f "build/waybar" ]; then
-        echo "Error: build/waybar binary not found after compilation"
-        return 1
-    fi
-    
-    # Copy to expected location
-    cp build/waybar waybargtk || return 1
+#!/usr/bin/env bash
+# Minimal build script for Waybargtk (Waybar fork)
+# Disables all optional features to avoid missing dependencies.
+
+MESON_OPTS=(
+    -Dlibinput=disabled
+    -Dlibnl=disabled
+    -Dlibudev=disabled
+    -Dlibevdev=disabled
+    -Dpulseaudio=disabled
+    -Dupower_glib=disabled
+    -Dpipewire=disabled
+    -Dmpris=disabled
+    -Dsystemd=disabled
+    -Ddbusmenu-gtk=disabled
+    -Dman-pages=disabled
+    -Dmpd=disabled
+    -Drfkill=disabled
+    -Dsndio=disabled
+    -Dlogind=disabled
+    -Dtests=disabled
+    -Djack=disabled
+    -Dwireplumber=disabled
+    -Dcava=disabled
+    -Dgps=disabled
+)
+
+# Configure (reconfigure if build dir exists)
+if [ -d "build" ]; then
+    meson setup --reconfigure "${MESON_OPTS[@]}" build || { echo "[bldit] meson configuration failed"; exit 1; }
+else
+    meson setup "${MESON_OPTS[@]}" build || { echo "[bldit] meson configuration failed"; exit 1; }
+fi
+
+# Build using ninja (the standard Meson backend)
+ninja -C build || { echo "[bldit] build failed"; exit 1; }
+
+# Verify binary exists and copy it to the project root as 'waybargtk'
+if [ -f "build/waybar" ]; then
+    cp "build/waybar" "waybargtk"
     chmod +x waybargtk
-}
+    echo "[bldit] Build succeeded – binary is ./waybargtk"
+else
+    echo "[bldit] ERROR: build/waybar not found after build"
+    ls -la build/ || true
+    exit 1
+fi
