@@ -28,6 +28,34 @@ static std::string toSuperscript(int num) {
   return superscripts[num];
 }
 
+// Helper function to extract special workspace number from name
+// Handles names like "sp1", "special:sp2", "sp3", etc.
+static int getSpecialWorkspaceNumber(const std::string& name) {
+  std::string cleanName = name;
+  // Remove "special:" prefix if present
+  if (cleanName.starts_with("special:")) {
+    cleanName = cleanName.substr(8);
+  }
+  
+  // Try to extract number from name like "sp1", "sp2", etc.
+  std::regex spRegex("sp(\\d+)");
+  std::smatch match;
+  if (std::regex_search(cleanName, match, spRegex) && match.size() > 1) {
+    try {
+      return std::stoi(match[1].str());
+    } catch (...) {
+      return 0;
+    }
+  }
+  
+  // Fallback: if name is just a number, use it
+  try {
+    return std::stoi(cleanName);
+  } catch (...) {
+    return 0;
+  }
+}
+
 namespace waybar::modules::hyprland {
 
 Workspace::Workspace(const Json::Value &workspace_data, Workspaces &workspace_manager,
@@ -322,8 +350,12 @@ void Workspace::update(const std::string &workspace_icon) {
           combined_box->pack_start(*number_label, false, false, 2);
         }
         
-        // Special workspace part (if it has windows)
-        if (m_pairedSpecialWorkspace && !m_pairedSpecialWorkspace->m_windowMap.empty()) {
+        // Special workspace part (if it has windows and is visible)
+        // Re-check m_pairedSpecialWorkspace after potential async operations
+        Workspace* pairedSpecial = m_pairedSpecialWorkspace;
+        if (pairedSpecial && 
+            !pairedSpecial->m_windowMap.empty() &&
+            (!m_workspaceManager.specialVisibleOnly() || pairedSpecial->isVisible())) {
           // Create clickable event box for special workspace
           auto special_event_box = Gtk::make_managed<Gtk::EventBox>();
           auto special_box = Gtk::make_managed<Gtk::Box>(Gtk::ORIENTATION_HORIZONTAL, 2);
@@ -334,7 +366,7 @@ void Workspace::update(const std::string &workspace_icon) {
           special_box->pack_start(*indicator, false, false);
           
           // Add special workspace icons (create fresh widgets, force smaller size)
-          auto special_icons = m_pairedSpecialWorkspace->createWindowIconWidgets(true);
+          auto special_icons = pairedSpecial->createWindowIconWidgets(true);
           for (auto icon : special_icons) {
             if (icon && !icon->get_parent()) {
               special_box->pack_start(*icon, false, false, 2);
@@ -342,21 +374,23 @@ void Workspace::update(const std::string &workspace_icon) {
           }
           
           // Add superscript workspace number after special workspace icons if enabled
-          if (m_workspaceManager.showSpecialWorkspaceNumber() && m_pairedSpecialWorkspace->id() != -99) {
-            // For special workspaces, use the absolute value of the ID
-            // Special workspaces have negative IDs, so we take the absolute value
-            int special_id = std::abs(m_pairedSpecialWorkspace->id());
-            auto special_number_label = Gtk::make_managed<Gtk::Label>();
-            // Use Pango markup for superscript: <span size="small" rise="5000">number</span>
-            special_number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
-            special_number_label->get_style_context()->add_class("special-workspace-number");
-            special_box->pack_start(*special_number_label, false, false, 2);
+          if (m_workspaceManager.showSpecialWorkspaceNumber() && pairedSpecial->id() != -99) {
+            // Extract number from special workspace name (e.g., "sp1" -> 1)
+            int special_id = getSpecialWorkspaceNumber(pairedSpecial->name());
+            if (special_id > 0) {
+              auto special_number_label = Gtk::make_managed<Gtk::Label>();
+              // Use Pango markup for superscript: <span size="small" rise="5000">number</span>
+              special_number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
+              special_number_label->get_style_context()->add_class("special-workspace-number");
+              special_box->pack_start(*special_number_label, false, false, 2);
+            }
           }
           
           special_event_box->add(*special_box);
           special_event_box->add_events(Gdk::BUTTON_PRESS_MASK);
+          // Use custom handler that goes to regular workspace first, then toggles special
           special_event_box->signal_button_press_event().connect(
-              sigc::mem_fun(*m_pairedSpecialWorkspace, &Workspace::handleClicked), false);
+              sigc::mem_fun(*this, &Workspace::handleSpecialWorkspaceClick), false);
           
           special_box->get_style_context()->add_class("special-workspace-section");
           combined_box->pack_start(*special_event_box, false, false);
@@ -509,14 +543,16 @@ void Workspace::updateTaskbar(const std::string &workspace_icon) {
     m_content.pack_start(*number_label, false, false, 2);
     number_label->show();
   } else if (isSpecial() && m_workspaceManager.showSpecialWorkspaceNumber() && id() != -99) {
-    // For special workspaces in taskbar mode
-    int special_id = std::abs(id());
-    auto number_label = Gtk::make_managed<Gtk::Label>();
-    // Use Pango markup for superscript: <span size="small" rise="5000">number</span>
-    number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
-    number_label->get_style_context()->add_class("special-workspace-number");
-    m_content.pack_start(*number_label, false, false, 2);
-    number_label->show();
+    // For special workspaces in taskbar mode - extract number from name
+    int special_id = getSpecialWorkspaceNumber(name());
+    if (special_id > 0) {
+      auto number_label = Gtk::make_managed<Gtk::Label>();
+      // Use Pango markup for superscript: <span size="small" rise="5000">number</span>
+      number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
+      number_label->get_style_context()->add_class("special-workspace-number");
+      m_content.pack_start(*number_label, false, false, 2);
+      number_label->show();
+    }
   }
 
   auto formatAfter = m_workspaceManager.formatAfter();
@@ -607,6 +643,39 @@ std::vector<Gtk::Widget*> Workspace::createWindowIconWidgets(bool forceSmaller) 
 bool Workspace::handleSpecialClick(GdkEventButton *bt) {
   if (bt->type == GDK_BUTTON_PRESS && m_pairedSpecialWorkspace) {
     return m_pairedSpecialWorkspace->handleClicked(bt);
+  }
+  return false;
+}
+
+bool Workspace::handleSpecialWorkspaceClick(GdkEventButton *bt) {
+  // Handle click on special workspace section in paired display
+  // First go to regular workspace, then toggle special workspace
+  if (bt->type == GDK_BUTTON_PRESS && bt->button == 1) {  // Left click only
+    if (m_pairedSpecialWorkspace) {
+      try {
+        // First, go to the regular workspace
+        if (id() > 0) {
+          if (m_workspaceManager.moveToMonitor()) {
+            m_ipc.getSocket1Reply("dispatch focusworkspaceoncurrentmonitor " + std::to_string(id()));
+          } else {
+            m_ipc.getSocket1Reply("dispatch workspace " + std::to_string(id()));
+          }
+        }
+        
+        // Then toggle the special workspace
+        // Extract number from special workspace name (e.g., "sp1" -> 1)
+        int special_num = getSpecialWorkspaceNumber(m_pairedSpecialWorkspace->name());
+        if (special_num > 0) {
+          m_ipc.getSocket1Reply("dispatch togglespecialworkspace sp" + std::to_string(special_num));
+        } else {
+          // Fallback: use the special workspace name directly
+          m_ipc.getSocket1Reply("dispatch togglespecialworkspace " + m_pairedSpecialWorkspace->name());
+        }
+        return true;
+      } catch (const std::exception &e) {
+        spdlog::error("Failed to handle special workspace click: {}", e.what());
+      }
+    }
   }
   return false;
 }

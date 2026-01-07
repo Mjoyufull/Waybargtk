@@ -887,6 +887,16 @@ void Workspaces::removeWorkspace(std::string const &workspaceString) {
     return;
   }
 
+  // CRITICAL FIX: Clear any references to this workspace before removing it
+  // This prevents dangling pointers in m_pairedSpecialWorkspace
+  Workspace* workspaceToRemove = workspace->get();
+  for (auto &ws : m_workspaces) {
+    if (ws->getPairedSpecialWorkspace() == workspaceToRemove) {
+      ws->setPairedSpecialWorkspace(nullptr);
+      spdlog::trace("Cleared paired special workspace reference from workspace {}", ws->id());
+    }
+  }
+
   m_box.remove(workspace->get()->button());
   m_workspaces.erase(workspace);
 }
@@ -906,20 +916,49 @@ void Workspaces::setCurrentMonitorId() {
   }
 }
 
+// Helper function to extract special workspace number from name
+static int getSpecialWorkspaceNumberFromName(const std::string& name) {
+  std::string cleanName = name;
+  // Remove "special:" prefix if present
+  if (cleanName.starts_with("special:")) {
+    cleanName = cleanName.substr(8);
+  }
+  
+  // Try to extract number from name like "sp1", "sp2", etc.
+  std::regex spRegex("sp(\\d+)");
+  std::smatch match;
+  if (std::regex_search(cleanName, match, spRegex) && match.size() > 1) {
+    try {
+      return std::stoi(match[1].str());
+    } catch (...) {
+      return 0;
+    }
+  }
+  
+  // Fallback: if name is just a number, use it
+  try {
+    return std::stoi(cleanName);
+  } catch (...) {
+    return 0;
+  }
+}
+
 void Workspaces::sortWorkspacesPaired() {
   // Extract regular and special workspaces
   std::map<int, std::unique_ptr<Workspace>> regularWorkspaces;
   std::map<int, std::unique_ptr<Workspace>> specialWorkspaces;
   std::vector<std::unique_ptr<Workspace>> otherWorkspaces;
 
+  // First, clear all existing pairings to avoid stale references
+  for (auto &workspace : m_workspaces) {
+    workspace->setPairedSpecialWorkspace(nullptr);
+  }
+
   for (auto &workspace : m_workspaces) {
     if (workspace->isSpecial()) {
-      // Try to extract number from special workspace name (e.g., "sp1" -> 1)
-      std::string name = workspace->name();
-      std::regex spRegex("sp(\\d+)");
-      std::smatch match;
-      if (std::regex_search(name, match, spRegex) && match.size() > 1) {
-        int num = std::stoi(match[1].str());
+      // Extract number from special workspace name (e.g., "sp1" -> 1)
+      int num = getSpecialWorkspaceNumberFromName(workspace->name());
+      if (num > 0) {
         specialWorkspaces[num] = std::move(workspace);
       } else {
         // Special workspace without number, put at end
@@ -953,6 +992,7 @@ void Workspaces::sortWorkspacesPaired() {
       // If there's a corresponding special workspace, pair them
       if (specialWorkspaces.contains(i)) {
         // Set up the pairing relationship (raw pointer is safe here, both are managed)
+        // Both workspaces will be in m_workspaces, so the pointer will remain valid
         regularWorkspaces[i]->setPairedSpecialWorkspace(specialWorkspaces[i].get());
         // Don't add the special workspace separately - it will be rendered as part of regular
         m_workspaces.push_back(std::move(regularWorkspaces[i]));

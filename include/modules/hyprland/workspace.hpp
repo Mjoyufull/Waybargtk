@@ -101,6 +101,7 @@ class Workspace {
   std::vector<Gtk::Widget*> createWindowIconWidgets(bool forceSmaller = false);  // New: GTK icon rendering
   bool handleClick(const GdkEventButton* event_button, WindowAddress const& addr) const;
   bool handleSpecialClick(GdkEventButton* event_button);
+  bool handleSpecialWorkspaceClick(GdkEventButton* event_button);
   bool shouldSkipWindow(const WindowRepr& window_repr) const;
   IPC& m_ipc;
 };
