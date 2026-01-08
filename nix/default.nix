@@ -23,7 +23,11 @@ waybar.overrideAttrs (oldAttrs: {
     src = lib.cleanSource ../.;
   };
 
-  mesonFlags = lib.remove "-Dgtk-layer-shell=enabled" oldAttrs.mesonFlags;
+  mesonFlags = (lib.remove "-Dgtk-layer-shell=enabled" oldAttrs.mesonFlags) ++ [
+    "-Dpulseaudio=enabled"
+    "-Dlibnl=enabled"
+    "-Ddbusmenu-gtk=enabled"
+  ];
 
   # downstream patch should not affect upstream
   patches = [ ];
@@ -35,6 +39,9 @@ waybar.overrideAttrs (oldAttrs: {
     ++ [
       pkgs.wireplumber
       pkgs.gpsd
+      pkgs.libpulseaudio
+      pkgs.libnl
+      pkgs.libdbusmenu-gtk3
     ];
 
   postUnpack = ''
