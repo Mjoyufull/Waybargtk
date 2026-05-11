@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <regex>
+#include <utility>
 #include <string>
 #include <variant>
 #include <vector>
@@ -26,6 +27,9 @@
 using WindowAddress = std::string;
 
 namespace waybar::modules::hyprland {
+
+/** Hyprlayerstack / layerstacked: sp{n}_{d} or legacy sp{n} → base id + layer depth */
+std::optional<std::pair<int, int>> parseLayerstackSpecialWorkspace(const std::string& name);
 
 class Workspaces;
 class Workspace {
@@ -67,8 +71,13 @@ class Workspace {
   std::optional<WindowRepr> closeWindow(WindowAddress const& addr);
 
   void update(const std::string& workspace_icon);
-  void setPairedSpecialWorkspace(Workspace* special) { m_pairedSpecialWorkspace = special; }
-  Workspace* getPairedSpecialWorkspace() const { return m_pairedSpecialWorkspace; }
+  void clearPairedLayers() { m_pairedLayerWorkspaces.clear(); }
+  void setPairedLayers(std::vector<Workspace*> layers) { m_pairedLayerWorkspaces = std::move(layers); }
+  const std::vector<Workspace*>& pairedLayers() const { return m_pairedLayerWorkspaces; }
+  void removePairedLayerIf(Workspace* removed);
+
+  /** True when Hyprland reports windows or we still track client icons for this workspace */
+  bool hasRenderableWindows() const { return m_windows > 0 || !m_windowMap.empty(); }
 
  private:
   Workspaces& m_workspaceManager;
@@ -92,8 +101,8 @@ class Workspace {
   Gtk::Label m_labelAfter;
   Gtk::Box m_windowIconsBox;  // Container for GTK window icons
 
-  // For combined workspace display
-  Workspace* m_pairedSpecialWorkspace = nullptr;
+  // Stacked specials (special:sp{n}_{d}) rendered after the numeric workspace strip
+  std::vector<Workspace*> m_pairedLayerWorkspaces;
   Gtk::EventBox* m_specialClickArea = nullptr;
 
   bool isEmpty() const;
@@ -101,7 +110,7 @@ class Workspace {
   std::vector<Gtk::Widget*> createWindowIconWidgets(bool forceSmaller = false);  // New: GTK icon rendering
   bool handleClick(const GdkEventButton* event_button, WindowAddress const& addr) const;
   bool handleSpecialClick(GdkEventButton* event_button);
-  bool handleSpecialWorkspaceClick(GdkEventButton* event_button);
+  bool handleSpecialLayerClick(GdkEventButton* event_button, Workspace* layer);
   bool shouldSkipWindow(const WindowRepr& window_repr) const;
   IPC& m_ipc;
 };

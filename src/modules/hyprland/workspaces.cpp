@@ -887,14 +887,10 @@ void Workspaces::removeWorkspace(std::string const &workspaceString) {
     return;
   }
 
-  // CRITICAL FIX: Clear any references to this workspace before removing it
-  // This prevents dangling pointers in m_pairedSpecialWorkspace
-  Workspace* workspaceToRemove = workspace->get();
+  // Clear references to specials being removed so paired rows stay consistent
+  Workspace *workspaceToRemove = workspace->get();
   for (auto &ws : m_workspaces) {
-    if (ws->getPairedSpecialWorkspace() == workspaceToRemove) {
-      ws->setPairedSpecialWorkspace(nullptr);
-      spdlog::trace("Cleared paired special workspace reference from workspace {}", ws->id());
-    }
+    ws->removePairedLayerIf(workspaceToRemove);
   }
 
   m_box.remove(workspace->get()->button());
@@ -916,100 +912,87 @@ void Workspaces::setCurrentMonitorId() {
   }
 }
 
-// Helper function to extract special workspace number from name
-static int getSpecialWorkspaceNumberFromName(const std::string& name) {
-  std::string cleanName = name;
-  // Remove "special:" prefix if present
-  if (cleanName.starts_with("special:")) {
-    cleanName = cleanName.substr(8);
-  }
-  
-  // Try to extract number from name like "sp1", "sp2", etc.
-  std::regex spRegex("sp(\\d+)");
-  std::smatch match;
-  if (std::regex_search(cleanName, match, spRegex) && match.size() > 1) {
-    try {
-      return std::stoi(match[1].str());
-    } catch (...) {
-      return 0;
-    }
-  }
-  
-  // Fallback: if name is just a number, use it
-  try {
-    return std::stoi(cleanName);
-  } catch (...) {
-    return 0;
-  }
-}
-
 void Workspaces::sortWorkspacesPaired() {
-  // Extract regular and special workspaces
   std::map<int, std::unique_ptr<Workspace>> regularWorkspaces;
-  std::map<int, std::unique_ptr<Workspace>> specialWorkspaces;
+  std::map<int, std::vector<std::unique_ptr<Workspace>>> layerstackSpecialsByBase;
   std::vector<std::unique_ptr<Workspace>> otherWorkspaces;
 
-  // First, clear all existing pairings to avoid stale references
   for (auto &workspace : m_workspaces) {
-    workspace->setPairedSpecialWorkspace(nullptr);
+    workspace->clearPairedLayers();
   }
 
   for (auto &workspace : m_workspaces) {
     if (workspace->isSpecial()) {
-      // Extract number from special workspace name (e.g., "sp1" -> 1)
-      int num = getSpecialWorkspaceNumberFromName(workspace->name());
-      if (num > 0) {
-        specialWorkspaces[num] = std::move(workspace);
+      if (auto layered = parseLayerstackSpecialWorkspace(workspace->name())) {
+        layerstackSpecialsByBase[layered->first].push_back(std::move(workspace));
       } else {
-        // Special workspace without number, put at end
         otherWorkspaces.push_back(std::move(workspace));
       }
     } else if (workspace->id() > 0) {
-      // Regular numbered workspace
       regularWorkspaces[workspace->id()] = std::move(workspace);
     } else {
-      // Named workspace, put at end
       otherWorkspaces.push_back(std::move(workspace));
     }
   }
 
-  // Clear and rebuild the workspaces vector in combined order
+  for (auto &[base_id, specials] : layerstackSpecialsByBase) {
+    std::ranges::sort(specials, [](const auto &a, const auto &b) {
+      auto oa = parseLayerstackSpecialWorkspace(a->name());
+      auto ob = parseLayerstackSpecialWorkspace(b->name());
+      if (!oa || !ob) {
+        return a->name() < b->name();
+      }
+      if (oa->second != ob->second) {
+        return oa->second < ob->second;
+      }
+      return a->name() < b->name();
+    });
+    (void)base_id;
+  }
+
   m_workspaces.clear();
 
-  // Find the maximum workspace number
   int maxNum = 0;
   if (!regularWorkspaces.empty()) {
     maxNum = std::max(maxNum, regularWorkspaces.rbegin()->first);
   }
-  if (!specialWorkspaces.empty()) {
-    maxNum = std::max(maxNum, specialWorkspaces.rbegin()->first);
+  if (!layerstackSpecialsByBase.empty()) {
+    maxNum = std::max(maxNum, layerstackSpecialsByBase.rbegin()->first);
   }
 
-  // Build combined list: Set up pairing and add only regular workspaces
-  // Special workspaces will be rendered inside their paired regular workspace
   for (int i = 1; i <= maxNum; ++i) {
-    if (regularWorkspaces.contains(i)) {
-      // If there's a corresponding special workspace, pair them
-      if (specialWorkspaces.contains(i)) {
-        // Set up the pairing relationship (raw pointer is safe here, both are managed)
-        // Both workspaces will be in m_workspaces, so the pointer will remain valid
-        regularWorkspaces[i]->setPairedSpecialWorkspace(specialWorkspaces[i].get());
-        // Don't add the special workspace separately - it will be rendered as part of regular
-        m_workspaces.push_back(std::move(regularWorkspaces[i]));
-        m_workspaces.push_back(std::move(specialWorkspaces[i]));  // Still add it for updates, but hide button
+    const bool hadRegular = regularWorkspaces.contains(i);
+    const bool hadLayers = layerstackSpecialsByBase.contains(i);
+
+    if (hadRegular && hadLayers) {
+      auto &layerVec = layerstackSpecialsByBase[i];
+      std::vector<Workspace *> layerPtrs;
+      layerPtrs.reserve(layerVec.size());
+      for (auto &lw : layerVec) {
+        layerPtrs.push_back(lw.get());
+      }
+      regularWorkspaces[i]->setPairedLayers(std::move(layerPtrs));
+      m_workspaces.push_back(std::move(regularWorkspaces[i]));
+
+      for (auto &layer : layerVec) {
+        m_workspaces.push_back(std::move(layer));
         m_workspaces.back()->button().set_no_show_all(true);
         m_workspaces.back()->button().hide();
-      } else {
-        // Regular workspace without special pair
-        m_workspaces.push_back(std::move(regularWorkspaces[i]));
       }
-    } else if (specialWorkspaces.contains(i)) {
-      // Special workspace without regular pair - add it normally
-      m_workspaces.push_back(std::move(specialWorkspaces[i]));
+      layerstackSpecialsByBase.erase(i);
+    } else if (hadRegular) {
+      m_workspaces.push_back(std::move(regularWorkspaces[i]));
+    } else if (hadLayers) {
+      auto layers = std::move(layerstackSpecialsByBase[i]);
+      layerstackSpecialsByBase.erase(i);
+      for (auto &layer : layers) {
+        if (layer) {
+          m_workspaces.push_back(std::move(layer));
+        }
+      }
     }
   }
 
-  // Add any remaining workspaces at the end
   for (auto &workspace : otherWorkspaces) {
     m_workspaces.push_back(std::move(workspace));
   }

@@ -1,7 +1,10 @@
 #include <json/value.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <memory>
+#include <optional>
+#include <regex>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -26,6 +29,11 @@ static std::string toSuperscript(int num) {
     return result;
   }
   return superscripts[num];
+}
+
+// Layerstacked depth label (small raised), e.g. L2 — not workspace id
+static std::string layerDepthMarkup(int depth) {
+  return "<span size='small' rise='5000'>L" + std::to_string(depth) + "</span>";
 }
 
 // Helper function to extract special workspace number from name
@@ -57,6 +65,39 @@ static int getSpecialWorkspaceNumber(const std::string& name) {
 }
 
 namespace waybar::modules::hyprland {
+
+std::optional<std::pair<int, int>> parseLayerstackSpecialWorkspace(const std::string& name) {
+  std::string n = name;
+  if (n.starts_with("special:")) {
+    n = n.substr(8);
+  }
+  static const std::regex kStacked(R"(^sp(\d+)_(\d+)$)");
+  std::smatch match;
+  if (std::regex_match(n, match, kStacked) && match.size() > 2) {
+    try {
+      return {{std::stoi(match[1].str()), std::stoi(match[2].str())}};
+    } catch (...) {
+      return std::nullopt;
+    }
+  }
+  static const std::regex kLegacy(R"(^sp(\d+)$)");
+  if (std::regex_match(n, match, kLegacy) && match.size() > 1) {
+    try {
+      return {{std::stoi(match[1].str()), 1}};
+    } catch (...) {
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+
+void Workspace::removePairedLayerIf(Workspace* removed) {
+  if (!removed) {
+    return;
+  }
+  auto& v = m_pairedLayerWorkspaces;
+  v.erase(std::remove(v.begin(), v.end(), removed), v.end());
+}
 
 Workspace::Workspace(const Json::Value &workspace_data, Workspaces &workspace_manager,
                      const Json::Value &clients_data)
@@ -136,7 +177,11 @@ bool Workspace::handleClicked(GdkEventButton *bt) const {
           m_ipc.getSocket1Reply("dispatch workspace name:" + name());
         }
       } else if (id() != -99) {  // named special
-        m_ipc.getSocket1Reply("dispatch togglespecialworkspace " + name());
+        if (parseLayerstackSpecialWorkspace(name())) {
+          m_ipc.getSocket1Reply("dispatch workspace special:" + name());
+        } else {
+          m_ipc.getSocket1Reply("dispatch togglespecialworkspace " + name());
+        }
       } else {  // special
         m_ipc.getSocket1Reply("dispatch togglespecialworkspace");
       }
@@ -317,27 +362,18 @@ void Workspace::update(const std::string &workspace_icon) {
     updateTaskbar(workspace_icon);
   } else {
     // Regular mode - use GTK widget rendering with system icons only
-    // Create combined workspace display if we have a paired special workspace
-    if (!isSpecial() && m_pairedSpecialWorkspace) {
+    // Create combined workspace display if we have stacked layer specials (sp{n}_{d})
+    if (!isSpecial() && !m_pairedLayerWorkspaces.empty()) {
       try {
-        // Combined display: [1 icons 󰍠 special_icons]
         auto combined_box = Gtk::make_managed<Gtk::Box>(Gtk::ORIENTATION_HORIZONTAL, 4);
-        
-        Workspace* pairedSpecial = m_pairedSpecialWorkspace;
-        // Check both window map AND actual window count from Hyprland to ensure we show icons
-        // even when window map might not be fully updated
-        bool hasSpecialWindows = pairedSpecial && (pairedSpecial->m_windows > 0 || !pairedSpecial->m_windowMap.empty());
-        
-        // Regular workspace number/name - always show workspace label for clickability
-        // Create a fresh label (don't reuse m_labelBefore to avoid parent issues)
+
         auto workspace_label = Gtk::make_managed<Gtk::Label>();
         workspace_label->set_markup(fmt::format(fmt::runtime(formatBefore), fmt::arg("id", id()),
                                                fmt::arg("name", name()), fmt::arg("icon", workspace_icon),
                                                fmt::arg("windows", "")));
         workspace_label->get_style_context()->add_class("workspace-label");
         combined_box->pack_start(*workspace_label, false, false);
-        
-        // Regular workspace icons (create fresh widgets)
+
         auto regular_icons = createWindowIconWidgets();
         bool hasRegularWindows = !regular_icons.empty();
         if (hasRegularWindows) {
@@ -346,7 +382,6 @@ void Workspace::update(const std::string &workspace_icon) {
               combined_box->pack_start(*icon, false, false, 2);
             }
           }
-          // Add superscript workspace number after regular workspace icons if enabled
           if (m_workspaceManager.showWorkspaceNumber() && id() > 0) {
             auto number_label = Gtk::make_managed<Gtk::Label>();
             number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(id()) + "</span>");
@@ -354,58 +389,64 @@ void Workspace::update(const std::string &workspace_icon) {
             combined_box->pack_start(*number_label, false, false, 2);
           }
         }
-        
-        // Special workspace part - ALWAYS show if paired special has windows
-        // This ensures special workspace content is visible even when regular workspace is empty
-        if (hasSpecialWindows) {
-          // Create clickable event box for special workspace
-          auto special_event_box = Gtk::make_managed<Gtk::EventBox>();
-          auto special_box = Gtk::make_managed<Gtk::Box>(Gtk::ORIENTATION_HORIZONTAL, 2);
-          
-          // Add indicator
-          auto indicator = Gtk::make_managed<Gtk::Label>();
-          indicator->set_markup(m_workspaceManager.specialWorkspaceIndicator());
-          special_box->pack_start(*indicator, false, false);
-          
-          // Add special workspace icons (create fresh widgets, force smaller size)
-          auto special_icons = pairedSpecial->createWindowIconWidgets(true);
-          for (auto icon : special_icons) {
-            if (icon && !icon->get_parent()) {
-              special_box->pack_start(*icon, false, false, 2);
+
+        bool anyLayerHasWindows =
+            std::ranges::any_of(m_pairedLayerWorkspaces, [](Workspace* layer) {
+              return layer && layer->hasRenderableWindows();
+            });
+
+        if (anyLayerHasWindows) {
+          for (Workspace* pairedLayer : m_pairedLayerWorkspaces) {
+            if (!pairedLayer) {
+              continue;
             }
-          }
-          
-          // Add superscript workspace number after special workspace icons if enabled
-          if (m_workspaceManager.showSpecialWorkspaceNumber() && pairedSpecial->id() != -99) {
-            int special_id = getSpecialWorkspaceNumber(pairedSpecial->name());
-            if (special_id > 0) {
-              auto special_number_label = Gtk::make_managed<Gtk::Label>();
-              special_number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
-              special_number_label->get_style_context()->add_class("special-workspace-number");
-              special_box->pack_start(*special_number_label, false, false, 2);
+            if (!pairedLayer->hasRenderableWindows()) {
+              continue;
             }
+
+            auto special_event_box = Gtk::make_managed<Gtk::EventBox>();
+            auto special_box = Gtk::make_managed<Gtk::Box>(Gtk::ORIENTATION_HORIZONTAL, 2);
+
+            auto indicator = Gtk::make_managed<Gtk::Label>();
+            indicator->set_markup(m_workspaceManager.specialWorkspaceIndicator());
+            special_box->pack_start(*indicator, false, false);
+
+            auto special_icons = pairedLayer->createWindowIconWidgets(true);
+            for (auto icon : special_icons) {
+              if (icon && !icon->get_parent()) {
+                special_box->pack_start(*icon, false, false, 2);
+              }
+            }
+
+            if (m_workspaceManager.showSpecialWorkspaceNumber() && pairedLayer->id() != -99) {
+              if (auto parsed = parseLayerstackSpecialWorkspace(pairedLayer->name())) {
+                auto special_number_label = Gtk::make_managed<Gtk::Label>();
+                special_number_label->set_markup(layerDepthMarkup(parsed->second));
+                special_number_label->get_style_context()->add_class("special-workspace-number");
+                special_box->pack_start(*special_number_label, false, false, 2);
+              }
+            }
+
+            special_event_box->add(*special_box);
+            special_event_box->add_events(Gdk::BUTTON_PRESS_MASK);
+            special_event_box->signal_button_press_event().connect(
+                [this, pairedLayer](GdkEventButton* bt) -> bool {
+                  return this->handleSpecialLayerClick(bt, pairedLayer);
+                },
+                false);
+
+            special_box->get_style_context()->add_class("special-workspace-section");
+            combined_box->pack_start(*special_event_box, false, false);
           }
-          
-          special_event_box->add(*special_box);
-          special_event_box->add_events(Gdk::BUTTON_PRESS_MASK);
-          // Click handler: go to the workspace the special is named after, then toggle it
-          special_event_box->signal_button_press_event().connect(
-              [this](GdkEventButton* bt) -> bool {
-                return this->handleSpecialWorkspaceClick(bt);
-              }, false);
-          
-          special_box->get_style_context()->add_class("special-workspace-section");
-          combined_box->pack_start(*special_event_box, false, false);
         }
-        
-        // If regular workspace is empty and we have workspace number enabled, show it at the end
+
         if (!hasRegularWindows && m_workspaceManager.showWorkspaceNumber() && id() > 0) {
           auto number_label = Gtk::make_managed<Gtk::Label>();
           number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(id()) + "</span>");
           number_label->get_style_context()->add_class("workspace-number");
           combined_box->pack_start(*number_label, false, false, 2);
         }
-        
+
         m_content.pack_start(*combined_box, false, false);
       } catch (const std::exception& e) {
         spdlog::warn("Error updating combined workspace {}: {}", id(), e.what());
@@ -448,11 +489,11 @@ void Workspace::update(const std::string &workspace_icon) {
       try {
         auto workspace_box = Gtk::make_managed<Gtk::Box>(Gtk::ORIENTATION_HORIZONTAL, 2);
         
-        // Add indicator
+        // Add indicator + short layer name (sp{n}_{d}) for layerstacked readability
         auto indicator = Gtk::make_managed<Gtk::Label>();
         indicator->set_markup(m_workspaceManager.specialWorkspaceIndicator());
         workspace_box->pack_start(*indicator, false, false);
-        
+
         // Add special workspace icons
         auto icons = createWindowIconWidgets(true);
         for (auto icon : icons) {
@@ -460,15 +501,23 @@ void Workspace::update(const std::string &workspace_icon) {
             workspace_box->pack_start(*icon, false, false, 2);
           }
         }
-        
-        // Add superscript workspace number if enabled
+
+        // Layer depth label (l2, l3) for stacked specials; otherwise legacy superscript workspace id
         if (m_workspaceManager.showSpecialWorkspaceNumber() && id() != -99) {
-          int special_id = getSpecialWorkspaceNumber(name());
-          if (special_id > 0) {
+          if (auto stacked = parseLayerstackSpecialWorkspace(name())) {
             auto number_label = Gtk::make_managed<Gtk::Label>();
-            number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
+            number_label->set_markup(layerDepthMarkup(stacked->second));
             number_label->get_style_context()->add_class("special-workspace-number");
             workspace_box->pack_start(*number_label, false, false, 2);
+          } else {
+            int special_id = getSpecialWorkspaceNumber(name());
+            if (special_id > 0) {
+              auto number_label = Gtk::make_managed<Gtk::Label>();
+              number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) +
+                                        "</span>");
+              number_label->get_style_context()->add_class("special-workspace-number");
+              workspace_box->pack_start(*number_label, false, false, 2);
+            }
           }
         }
         
@@ -587,15 +636,22 @@ void Workspace::updateTaskbar(const std::string &workspace_icon) {
     m_content.pack_start(*number_label, false, false, 2);
     number_label->show();
   } else if (isSpecial() && m_workspaceManager.showSpecialWorkspaceNumber() && id() != -99) {
-    // For special workspaces in taskbar mode - extract number from name
-    int special_id = getSpecialWorkspaceNumber(name());
-    if (special_id > 0) {
+    if (auto stacked = parseLayerstackSpecialWorkspace(name())) {
       auto number_label = Gtk::make_managed<Gtk::Label>();
-      // Use Pango markup for superscript: <span size="small" rise="5000">number</span>
-      number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) + "</span>");
+      number_label->set_markup(layerDepthMarkup(stacked->second));
       number_label->get_style_context()->add_class("special-workspace-number");
       m_content.pack_start(*number_label, false, false, 2);
       number_label->show();
+    } else {
+      int special_id = getSpecialWorkspaceNumber(name());
+      if (special_id > 0) {
+        auto number_label = Gtk::make_managed<Gtk::Label>();
+        number_label->set_markup("<span size='small' rise='5000'>" + toSuperscript(special_id) +
+                                  "</span>");
+        number_label->get_style_context()->add_class("special-workspace-number");
+        m_content.pack_start(*number_label, false, false, 2);
+        number_label->show();
+      }
     }
   }
 
@@ -685,53 +741,31 @@ std::vector<Gtk::Widget*> Workspace::createWindowIconWidgets(bool forceSmaller) 
 }
 
 bool Workspace::handleSpecialClick(GdkEventButton *bt) {
-  if (bt->type == GDK_BUTTON_PRESS && m_pairedSpecialWorkspace) {
-    return m_pairedSpecialWorkspace->handleClicked(bt);
+  if (bt->type == GDK_BUTTON_PRESS && !m_pairedLayerWorkspaces.empty()) {
+    return m_pairedLayerWorkspaces.front()->handleClicked(bt);
   }
   return false;
 }
 
-bool Workspace::handleSpecialWorkspaceClick(GdkEventButton *bt) {
-  // Handle click on special workspace section in paired display
-  // Go to the workspace that the special workspace is NAMED after (e.g., sp1 -> workspace 1)
-  // Then toggle that special workspace
-  // Return true to stop event propagation so button click doesn't also fire
-  if (bt->type == GDK_BUTTON_PRESS && bt->button == 1) {  // Left click only
-    if (m_pairedSpecialWorkspace) {
-      try {
-        // Extract number from special workspace name (e.g., "sp1" -> 1)
-        // This determines which workspace we should go to
-        int special_num = getSpecialWorkspaceNumber(m_pairedSpecialWorkspace->name());
-        
-        // First, go to the workspace that the special workspace is named after
-        // For example: sp1 -> go to workspace 1, sp2 -> go to workspace 2
-        if (special_num > 0) {
-          if (m_workspaceManager.moveToMonitor()) {
-            m_ipc.getSocket1Reply("dispatch focusworkspaceoncurrentmonitor " + std::to_string(special_num));
-          } else {
-            m_ipc.getSocket1Reply("dispatch workspace " + std::to_string(special_num));
-          }
-          // Then toggle the special workspace
-          m_ipc.getSocket1Reply("dispatch togglespecialworkspace sp" + std::to_string(special_num));
-        } else {
-          // Fallback: if we can't extract a number, use the current regular workspace
-          if (id() > 0) {
-            if (m_workspaceManager.moveToMonitor()) {
-              m_ipc.getSocket1Reply("dispatch focusworkspaceoncurrentmonitor " + std::to_string(id()));
-            } else {
-              m_ipc.getSocket1Reply("dispatch workspace " + std::to_string(id()));
-            }
-          }
-          // Toggle the special workspace using its name directly
-          m_ipc.getSocket1Reply("dispatch togglespecialworkspace " + m_pairedSpecialWorkspace->name());
-        }
-        return true;  // Stop event propagation
-      } catch (const std::exception &e) {
-        spdlog::error("Failed to handle special workspace click: {}", e.what());
+bool Workspace::handleSpecialLayerClick(GdkEventButton *bt, Workspace *layer) {
+  if (bt->type != GDK_BUTTON_PRESS || bt->button != 1 || !layer) {
+    return false;
+  }
+  try {
+    const int base = id();
+    if (base > 0) {
+      if (m_workspaceManager.moveToMonitor()) {
+        m_ipc.getSocket1Reply("dispatch focusworkspaceoncurrentmonitor " + std::to_string(base));
+      } else {
+        m_ipc.getSocket1Reply("dispatch workspace " + std::to_string(base));
       }
     }
+    m_ipc.getSocket1Reply("dispatch workspace special:" + layer->name());
+    return true;
+  } catch (const std::exception &e) {
+    spdlog::error("Failed to handle special layer click: {}", e.what());
   }
-  return false;  // Allow event to propagate if not handled
+  return false;
 }
 
 }  // namespace waybar::modules::hyprland
